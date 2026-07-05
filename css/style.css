@@ -365,6 +365,10 @@ body {
     border: 3px dashed var(--primary);
 }
 
+.drop-overlay[hidden] {
+    display: none !important;
+}
+
 .drop-message {
     text-align: center;
     color: var(--primary);
