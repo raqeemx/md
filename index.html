@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl" data-theme="light">
+<html lang="ar" dir="rtl" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,7 +8,7 @@
 
     <!-- Google Fonts: Arabic + Latin + Monospace -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
@@ -107,7 +107,30 @@
                     <span data-i18n="preview">المعاينة</span>
                 </span>
             </div>
-            <article id="preview" class="preview markdown-body"></article>
+            <div class="reader-layout">
+                <aside id="preview-toc" class="preview-toc" aria-label="فهرس الملف">
+                    <div class="toc-title" data-i18n="tocTitle">فهرس الملف</div>
+                    <div id="toc-links" class="toc-links"></div>
+                </aside>
+
+                <div id="reader-scroll" class="reader-scroll">
+                    <section id="preview-cover" class="preview-cover">
+                        <span class="preview-eyebrow">
+                            <span class="pulse-dot" aria-hidden="true"></span>
+                            <span data-i18n="previewBadge">وضع قراءة احترافي</span>
+                        </span>
+                        <h2 id="preview-title">محرر ماركداون</h2>
+                        <p id="preview-summary" data-i18n="previewSummaryEmpty">افتح ملف Markdown أو ابدأ الكتابة لعرضه بتنسيق احترافي.</p>
+                        <div class="preview-chips" aria-label="معلومات الملف">
+                            <span class="preview-chip"><i class="fa-solid fa-file-lines" aria-hidden="true"></i><span id="preview-file-chip">untitled.md</span></span>
+                            <span class="preview-chip"><i class="fa-solid fa-list-ul" aria-hidden="true"></i><span id="preview-section-chip">0 أقسام</span></span>
+                            <span class="preview-chip"><i class="fa-solid fa-align-left" aria-hidden="true"></i><span id="preview-direction-chip">RTL</span></span>
+                        </div>
+                    </section>
+
+                    <article id="preview" class="preview markdown-body"></article>
+                </div>
+            </div>
         </section>
     </main>
 

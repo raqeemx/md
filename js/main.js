@@ -23,6 +23,14 @@ const I18N = {
         toggleTheme: 'الوضع الليلي / النهاري',
         editor: 'المحرر', preview: 'المعاينة',
         words: 'كلمات', chars: 'أحرف', lines: 'أسطر',
+        tocTitle: 'فهرس الملف',
+        previewBadge: 'وضع قراءة احترافي',
+        previewSummaryEmpty: 'افتح ملف Markdown أو ابدأ الكتابة لعرضه بتنسيق احترافي.',
+        noHeadings: 'أضف عناوين H2 أو H3 ليظهر الفهرس هنا',
+        sectionsCount: (count) => `${count} أقسام`,
+        copied: 'تم النسخ',
+        copyCode: 'نسخ',
+        copyFailed: 'تعذر نسخ الكود',
         dropHere: 'أفلت ملف Markdown هنا',
         editorPlaceholder: 'اكتب نص Markdown هنا… أو افتح ملفاً من جهازك، أو اسحب الملف وأفلته في النافذة',
         confirmClear: 'هل أنت متأكد من تفريغ المحتوى؟ سيتم فقدان التعديلات غير المحفوظة.',
@@ -48,6 +56,14 @@ const I18N = {
         toggleTheme: 'Dark / light mode',
         editor: 'Editor', preview: 'Preview',
         words: 'Words', chars: 'Chars', lines: 'Lines',
+        tocTitle: 'Document index',
+        previewBadge: 'Professional reading view',
+        previewSummaryEmpty: 'Open a Markdown file or start writing to render it professionally.',
+        noHeadings: 'Add H2 or H3 headings to show an index here',
+        sectionsCount: (count) => `${count} sections`,
+        copied: 'Copied',
+        copyCode: 'Copy',
+        copyFailed: 'Could not copy code',
         dropHere: 'Drop your Markdown file here',
         editorPlaceholder: 'Write Markdown here… or open a file from your device, or drag & drop it into the window',
         confirmClear: 'Are you sure you want to clear the content? Unsaved changes will be lost.',
@@ -67,7 +83,7 @@ const I18N = {
 const state = {
     lang: localStorage.getItem('md.lang') || 'ar',        // لغة الواجهة
     dir: localStorage.getItem('md.dir') || 'rtl',         // اتجاه النص
-    theme: localStorage.getItem('md.theme') || 'light',   // المظهر
+    theme: localStorage.getItem('md.theme') || 'dark',    // المظهر
     view: localStorage.getItem('md.view') || 'split',     // وضع العرض
     fileName: 'untitled.md',
     dirty: false,                                         // تعديلات غير محفوظة
@@ -77,6 +93,13 @@ const el = {
     html: document.documentElement,
     editor: document.getElementById('editor'),
     preview: document.getElementById('preview'),
+    readerScroll: document.getElementById('reader-scroll'),
+    tocLinks: document.getElementById('toc-links'),
+    previewTitle: document.getElementById('preview-title'),
+    previewSummary: document.getElementById('preview-summary'),
+    previewFileChip: document.getElementById('preview-file-chip'),
+    previewSectionChip: document.getElementById('preview-section-chip'),
+    previewDirectionChip: document.getElementById('preview-direction-chip'),
     workspace: document.getElementById('workspace'),
     fileInput: document.getElementById('file-input'),
     fileName: document.getElementById('file-name'),
@@ -100,7 +123,12 @@ const el = {
     hljsDark: document.getElementById('hljs-theme-dark'),
 };
 
-const t = (key) => I18N[state.lang][key] || key;
+const t = (key, ...args) => {
+    const value = I18N[state.lang][key];
+    return typeof value === 'function' ? value(...args) : value || key;
+};
+
+const RTL_TEXT_RE = /[\u0600-\u06FF]/;
 
 /* ------------------------------------------------------------
    3) إعداد مكتبة marked + التمييز اللوني للأكواد
@@ -114,18 +142,162 @@ marked.setOptions({
 /* ------------------------------------------------------------
    4) المعاينة المباشرة Live Preview
 ------------------------------------------------------------ */
+function slugifyHeading(text, index, usedIds) {
+    const base = text
+        .trim()
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s-]/gu, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || `section-${index + 1}`;
+
+    let slug = base;
+    let counter = 2;
+    while (usedIds.has(slug)) {
+        slug = `${base}-${counter}`;
+        counter++;
+    }
+    usedIds.add(slug);
+    return slug;
+}
+
+function prepareHeadings() {
+    const usedIds = new Set();
+    const headings = Array.from(el.preview.querySelectorAll('h1, h2, h3'));
+    headings.forEach((heading, index) => {
+        const text = heading.textContent.trim();
+        if (!heading.id) heading.id = slugifyHeading(text, index, usedIds);
+        else usedIds.add(heading.id);
+    });
+    return headings.filter((heading) => heading.matches('h2, h3'));
+}
+
+function wrapTables() {
+    el.preview.querySelectorAll('table').forEach((table) => {
+        if (table.parentElement?.classList.contains('table-wrap')) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'table-wrap';
+        table.parentNode.insertBefore(wrap, table);
+        wrap.appendChild(table);
+    });
+}
+
+function wrapCodeBlocks() {
+    el.preview.querySelectorAll('pre').forEach((pre) => {
+        if (pre.parentElement?.classList.contains('code-block')) return;
+
+        const code = pre.querySelector('code');
+        const langClass = Array.from(code?.classList || []).find((name) => name.startsWith('language-'));
+        const containsArabic = RTL_TEXT_RE.test(code?.textContent || '');
+        const lang = langClass ? langClass.replace('language-', '') : containsArabic ? 'arabic' : 'text';
+
+        const block = document.createElement('div');
+        block.className = `code-block${containsArabic ? ' rtl-code' : ''}`;
+        if (containsArabic) code.classList.add('rtl-inline-code');
+
+        const head = document.createElement('div');
+        head.className = 'code-head';
+
+        const label = document.createElement('span');
+        label.className = 'code-lang';
+        label.textContent = lang;
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'copy-btn';
+        button.innerHTML = `<i class="fa-regular fa-copy" aria-hidden="true"></i><span>${t('copyCode')}</span>`;
+        button.addEventListener('click', async () => {
+            const text = code?.innerText || '';
+            try {
+                if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const temp = document.createElement('textarea');
+                    temp.value = text;
+                    temp.setAttribute('readonly', '');
+                    temp.style.position = 'fixed';
+                    temp.style.opacity = '0';
+                    document.body.appendChild(temp);
+                    temp.select();
+                    document.execCommand('copy');
+                    temp.remove();
+                }
+                button.classList.add('copied');
+                button.querySelector('span').textContent = t('copied');
+                setTimeout(() => {
+                    button.classList.remove('copied');
+                    button.querySelector('span').textContent = t('copyCode');
+                }, 1500);
+            } catch {
+                showToast(t('copyFailed'));
+            }
+        });
+
+        head.append(label, button);
+        pre.parentNode.insertBefore(block, pre);
+        block.append(head, pre);
+    });
+}
+
+function renderToc(headings) {
+    el.tocLinks.innerHTML = '';
+    if (!headings.length) {
+        const empty = document.createElement('span');
+        empty.className = 'toc-empty';
+        empty.textContent = t('noHeadings');
+        el.tocLinks.appendChild(empty);
+        return;
+    }
+
+    headings.forEach((heading, index) => {
+        const link = document.createElement('a');
+        link.className = `toc-link level-${heading.tagName === 'H3' ? '3' : '2'}${index === 0 ? ' active' : ''}`;
+        link.href = `#${heading.id}`;
+        link.textContent = heading.textContent.trim();
+        link.addEventListener('click', (event) => {
+            event.preventDefault();
+            el.tocLinks.querySelectorAll('.toc-link').forEach((node) => node.classList.remove('active'));
+            link.classList.add('active');
+            heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        el.tocLinks.appendChild(link);
+    });
+}
+
+function updatePreviewCover(raw, headings) {
+    const titleNode = el.preview.querySelector('h1') || el.preview.querySelector('h2');
+    const summaryNode = el.preview.querySelector('p');
+    const fallbackTitle = state.lang === 'ar' ? 'محرر ماركداون' : 'Markdown Editor';
+
+    el.previewTitle.textContent = titleNode?.textContent.trim() || fallbackTitle;
+    el.previewSummary.textContent = summaryNode?.textContent.trim() || t('previewSummaryEmpty');
+    el.previewFileChip.textContent = state.fileName;
+    el.previewSectionChip.textContent = t('sectionsCount', headings.length);
+    el.previewDirectionChip.textContent = state.dir.toUpperCase();
+
+    updateStats(raw);
+}
+
 function renderPreview() {
     const raw = el.editor.value;
     // تحويل Markdown إلى HTML ثم تعقيمه لمنع XSS
     const html = DOMPurify.sanitize(marked.parse(raw));
     el.preview.innerHTML = html;
 
+    const headings = prepareHeadings();
+    wrapTables();
+    wrapCodeBlocks();
+    el.preview.querySelectorAll('code').forEach((code) => {
+        if (RTL_TEXT_RE.test(code.textContent || '')) code.classList.add('rtl-inline-code');
+    });
+
     // تمييز الأكواد بعد الإدراج
     el.preview.querySelectorAll('pre code').forEach((block) => {
         hljs.highlightElement(block);
     });
 
-    updateStats(raw);
+    renderToc(headings);
+    updatePreviewCover(raw, headings);
 }
 
 // Debounce لتحسين الأداء أثناء الكتابة السريعة
@@ -253,6 +425,7 @@ function setDirection(dir) {
     localStorage.setItem('md.dir', dir);
     el.html.dir = dir;
     el.dirLabel.textContent = dir.toUpperCase();
+    if (el.previewDirectionChip) el.previewDirectionChip.textContent = dir.toUpperCase();
 }
 
 function toggleDirection() {
@@ -290,6 +463,7 @@ function toggleLanguage() {
     applyLanguage(newLang);
     // تبديل الاتجاه تلقائياً مع اللغة (يمكن تعديله يدوياً بعدها)
     setDirection(newLang === 'ar' ? 'rtl' : 'ltr');
+    renderPreview();
 }
 
 /* ------------------------------------------------------------
